@@ -33,7 +33,7 @@ def get_parser():
                  'fastscnn', 'fddwnet', 'fpenet', 'fssnet', 'icnet', 'lednet',
                  'linknet', 'lite_hrnet', 'liteseg', 'mininet', 'mininetv2', 'ppliteseg', 
                  'regseg', 'segnet', 'shelfnet', 'sqnet', 'stdc', 'swiftnet',
-                 'smp'],
+                 'smp', 'mlpmixer'],
         help='choose which model you want to use')
     parser.add_argument('--encoder', type=str, default=None, 
         help='choose which encoder of SMP model you want to use (please refer to SMP repo)')

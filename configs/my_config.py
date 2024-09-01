@@ -5,36 +5,36 @@ class MyConfig(BaseConfig):
     def __init__(self,):
         super(MyConfig, self).__init__()
         # Dataset
-        self.dataset = 'cityscapes'
-        self.data_root = '/path/to/your/dataset'
-        self.num_class = 19
+        self.dataset = 'prostate'
+        self.data_root = './datasets/prostate/'
+        self.num_class = 3
         
         # Model
-        self.model = 'bisenetv2'
+        self.model = 'farseenet3'
         
         # Training
-        self.total_epoch = 200
-        self.train_bs = 8
-        self.loss_type = 'ohem'
-        self.optimizer_type = 'adam'
+        self.total_epoch = 50
+        self.train_bs = 1
+        self.loss_type = 'ce'
+        self.optimizer_type = 'adamw'
         self.logger_name = 'seg_trainer'
-        self.use_aux = True
+        self.use_aux = False
 
         # Validating
-        self.val_bs = 10
+        self.val_bs = 3
         
         # Testing
-        self.is_testing = True
-        self.test_bs = 8
-        self.test_data_folder = '/path/to/your/test/folder'
-        self.load_ckpt_path = '/path/to/your/inference/checkpoint'
+        self.is_testing = False
+        self.test_bs = 1
+        self.test_data_folder = './datasets/cityscapes/leftImg8bit/test'
+        self.load_ckpt_path =  'save/farseenet_mitb5_train_all-prostate/last.pth'
         self.save_mask = True
         
         # Training setting
         self.use_ema = False
         
         # Augmentation
-        self.crop_size = 768
+        self.crop_size = 512
         self.randscale = [-0.5, 1.0]
         self.scale = 1.0
         self.brightness = 0.5
@@ -44,7 +44,14 @@ class MyConfig(BaseConfig):
         
         # Knowledge Distillation
         self.kd_training = False
-        self.teacher_ckpt = '/path/to/your/teacher/checkpoint'
-        self.teacher_model = 'smp'
-        self.teacher_encoder = 'resnet101'
-        self.teacher_decoder = 'deeplabv3p'
+        self.teacher_ckpt = 'save/farseenet_mitb5_train_all-prostate/last.pth'
+        self.teacher_model = 'farseenet3'
+        self.teacher_encoder = None
+        self.teacher_decoder = None
+
+        #Explainability
+        self.explainability = False
+        self.path_to_sample = "./sample/pic1.png"
+        
+        #GROKFAST
+        self.grokfast = False

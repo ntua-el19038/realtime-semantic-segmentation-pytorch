@@ -38,26 +38,45 @@ from .shelfnet import ShelfNet
 from .sqnet import SQNet
 from .stdc import STDC, LaplacianConv
 from .swiftnet import SwiftNet
+from .mlpmixer import MLP_Mixer
+from .farseenet2 import FarSeeNet2
+from .farseenet3 import FarSeeNet3
+from .shelfnet2 import ShelfNet2
+from .farseenet_pre import FarSeeNet_Pre
+
 
 
 decoder_hub = {'deeplabv3':smp.DeepLabV3, 'deeplabv3p':smp.DeepLabV3Plus, 'fpn':smp.FPN,
                'linknet':smp.Linknet, 'manet':smp.MAnet, 'pan':smp.PAN, 'pspnet':smp.PSPNet,
                'unet':smp.Unet, 'unetpp':smp.UnetPlusPlus}
 
-
+model_hub = {'adscnet':ADSCNet, 'aglnet':AGLNet, 'bisenetv1':BiSeNetv1, 
+                'bisenetv2':BiSeNetv2, 'canet':CANet, 'cfpnet':CFPNet, 
+                'cgnet':CGNet, 'contextnet':ContextNet, 'dabnet':DABNet, 
+                'ddrnet':DDRNet, 'dfanet':DFANet, 'edanet':EDANet, 
+                'enet':ENet, 'erfnet':ERFNet, 'esnet':ESNet, 
+                'espnet':ESPNet, 'espnetv2':ESPNetv2, 'fanet':FANet, 'farseenet':FarSeeNet,
+                'farseenet2':FarSeeNet2, 'farseenet3':FarSeeNet3, 'farseenet_pre': FarSeeNet_Pre, 
+                'fastscnn':FastSCNN, 'fddwnet':FDDWNet, 'fpenet':FPENet, 
+                'fssnet':FSSNet, 'icnet':ICNet, 'lednet':LEDNet,
+                'linknet':LinkNet, 'lite_hrnet':LiteHRNet, 'liteseg':LiteSeg, 'mininet':MiniNet, 
+                'mininetv2':MiniNetv2, 'ppliteseg':PPLiteSeg, 'regseg':RegSeg,
+                'segnet':SegNet, 'shelfnet':ShelfNet, 'sqnet':SQNet, 
+                'stdc':STDC, 'swiftnet':SwiftNet, 'mlpmixer': MLP_Mixer, 'shelfnet2': ShelfNet2}
 def get_model(config):
     model_hub = {'adscnet':ADSCNet, 'aglnet':AGLNet, 'bisenetv1':BiSeNetv1, 
                 'bisenetv2':BiSeNetv2, 'canet':CANet, 'cfpnet':CFPNet, 
                 'cgnet':CGNet, 'contextnet':ContextNet, 'dabnet':DABNet, 
                 'ddrnet':DDRNet, 'dfanet':DFANet, 'edanet':EDANet, 
                 'enet':ENet, 'erfnet':ERFNet, 'esnet':ESNet, 
-                'espnet':ESPNet, 'espnetv2':ESPNetv2, 'fanet':FANet, 'farseenet':FarSeeNet, 
+                'espnet':ESPNet, 'espnetv2':ESPNetv2, 'fanet':FANet, 'farseenet':FarSeeNet,
+                'farseenet2':FarSeeNet2, 'farseenet3':FarSeeNet3, 'farseenet_pre': FarSeeNet_Pre, 
                 'fastscnn':FastSCNN, 'fddwnet':FDDWNet, 'fpenet':FPENet, 
                 'fssnet':FSSNet, 'icnet':ICNet, 'lednet':LEDNet,
                 'linknet':LinkNet, 'lite_hrnet':LiteHRNet, 'liteseg':LiteSeg, 'mininet':MiniNet, 
                 'mininetv2':MiniNetv2, 'ppliteseg':PPLiteSeg, 'regseg':RegSeg,
                 'segnet':SegNet, 'shelfnet':ShelfNet, 'sqnet':SQNet, 
-                'stdc':STDC, 'swiftnet':SwiftNet,}
+                'stdc':STDC, 'swiftnet':SwiftNet, 'mlpmixer': MLP_Mixer, 'shelfnet2': ShelfNet2}
 
     # The following models currently support auxiliary heads
     aux_models = ['bisenetv2', 'ddrnet', 'icnet']
@@ -97,11 +116,13 @@ def get_teacher_model(config, device):
         if not os.path.isfile(config.teacher_ckpt):
             raise ValueError(f'Could not find teacher checkpoint at path {config.teacher_ckpt}.')
 
-        if config.teacher_decoder not in decoder_hub.keys():
-            raise ValueError(f"Unsupported teacher decoder type: {config.teacher_decoder}")      
+        # if config.teacher_decoder not in decoder_hub.keys():
+        #     raise ValueError(f"Unsupported teacher decoder type: {config.teacher_decoder}")      
 
-        model = decoder_hub[config.teacher_decoder](encoder_name=config.teacher_encoder, 
-                            encoder_weights=None, in_channels=3, classes=config.num_class)        
+        # model = decoder_hub[config.teacher_decoder](encoder_name=config.teacher_encoder, 
+        #                     encoder_weights=None, in_channels=3, classes=config.num_class)        
+        if config.model in model_hub.keys():
+            model = model_hub[config.teacher_model](num_class=config.num_class)
 
         teacher_ckpt = torch.load(config.teacher_ckpt, map_location=torch.device('cpu'))
         model.load_state_dict(teacher_ckpt['state_dict'])

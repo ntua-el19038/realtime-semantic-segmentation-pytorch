@@ -60,7 +60,7 @@ def get_loss_fn(config, device):
 
     if config.loss_type == 'ce':
         criterion = nn.CrossEntropyLoss(ignore_index=config.ignore_index, 
-                                        reduction=config.reduction, weight=weights)
+                                        reduction='mean', weight=weights)
 
     elif config.loss_type == 'ohem':
         criterion = OhemCELoss(thresh=config.ohem_thrs, ignore_index=config.ignore_index)  

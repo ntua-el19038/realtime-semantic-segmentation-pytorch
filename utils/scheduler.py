@@ -1,5 +1,6 @@
 from torch.optim.lr_scheduler import OneCycleLR, StepLR
 from math import ceil
+from torch_poly_lr_decay import PolynomialLRDecay
 
 
 def get_scheduler(config, optimizer):
@@ -20,6 +21,10 @@ def get_scheduler(config, optimizer):
 
     elif config.lr_policy == 'step':
         scheduler = StepLR(optimizer, step_size=config.step_size, gamma=0.1)
+    
+    elif config.lr_policy == 'poly':
+        scheduler = PolynomialLRDecay(optimizer, max_decay_steps=5, end_learning_rate=0.0, power=1.0)
+
 
     else:
         raise NotImplementedError(f'Unsupported scheduler type: {config.lr_policy}')

@@ -12,8 +12,8 @@ def test_model_speed(config, ratio=0.5, imgw=2048, imgh=1024, iterations=None):
     
     if ratio != 1.0:
         assert ratio > 0, 'Ratio should be larger than 0.\n'
-        imgw = int(imgw * ratio)
-        imgh = int(imgh * ratio)
+        imgw = 512 #int(imgw * ratio)
+        imgh = 512 #int(imgh * ratio)
 
     device = torch.device('cuda')
     # torch.backends.cudnn.enabled = True

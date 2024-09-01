@@ -5,11 +5,16 @@ from PIL import Image
 from tqdm import tqdm
 from torch.cuda import amp
 import torch.nn.functional as F
+import albumentations as AT
+from albumentations.pytorch import ToTensorV2
 
 from .base_trainer import BaseTrainer
 from .loss import kd_loss_fn
 from models import get_teacher_model
-from utils import (get_seg_metrics, sampler_set_epoch, get_colormap)
+from utils import (get_seg_metrics, sampler_set_epoch, get_colormap, gradfilter_ma, gradfilter_ema, transforms)
+# from vit_explain import VITAttentionGradRollout, VITAttentionRollout
+from PIL import Image
+import cv2
 
 
 class SegTrainer(BaseTrainer):
@@ -27,13 +32,39 @@ class SegTrainer(BaseTrainer):
 
                 self.laplacian_conv = LaplacianConv(self.device)
                 self.detail_loss_fn = get_detail_loss_fn(config)
+            # Print model size after initialization
+            self.print_model_size(self.model)
+            # print(self.model)
+
+
+    def print_model_size(self, model):
+        param_size = 0
+        param_count = 0
+        for param in model.parameters():
+            param_size += param.nelement() * param.element_size()
+            param_count += param.nelement()
+        buffer_size = 0
+        buffer_count = 0
+        for buffer in model.buffers():
+            buffer_size += buffer.nelement() * buffer.element_size()
+            buffer_count += buffer.nelement()
+
+        size_all_mb = (param_size + buffer_size) / 1024**2
+        print(f'Model Size: {size_all_mb:.3f} MB')
+        print(f'Parameter Count: {param_count}')
+        print(f'Buffer Count: {buffer_count}')
+
 
     def train_one_epoch(self, config):
+        # print(self.grads)
         self.model.train()
         
         sampler_set_epoch(config, self.train_loader, self.cur_epoch) 
     
         pbar = tqdm(self.train_loader) if self.main_rank else self.train_loader
+
+        #try to implement gradient accumulation
+        accumulation_steps = 3  # Number of iterations to accumulate gradients
 
         for cur_itrs, (images, masks) in enumerate(pbar):
             self.cur_itrs = cur_itrs
@@ -42,7 +73,7 @@ class SegTrainer(BaseTrainer):
             images = images.to(self.device, dtype=torch.float32)
             masks = masks.to(self.device, dtype=torch.long)    
 
-            self.optimizer.zero_grad()
+            # self.optimizer.zero_grad()
             
             # Forward path
             if config.use_aux:
@@ -104,20 +135,31 @@ class SegTrainer(BaseTrainer):
                     self.writer.add_scalar('train/loss_kd', loss_kd.detach(), self.train_itrs)
                     self.writer.add_scalar('train/loss_total', loss.detach(), self.train_itrs)
                    
-            # Backward path
-            self.scaler.scale(loss).backward()
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
-            self.scheduler.step()
-            
-            self.ema_model.update(self.model, self.train_itrs)
+            # Backward path with gradient accumulation
+            self.scaler.scale(loss/ accumulation_steps).backward()
+            if (cur_itrs + 1) % accumulation_steps == 0:
+                if config.grokfast:
+                    self.grads = gradfilter_ema(self.model, grads=self.grads)
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+                self.optimizer.zero_grad()  # Reset gradients after accumulation step
+                self.scheduler.step()
+                self.ema_model.update(self.model, self.train_itrs)
 
             if self.main_rank:
                 pbar.set_description(('%s'*2) % 
                                 (f'Epoch:{self.cur_epoch}/{config.total_epoch}{" "*4}|',
                                 f'Loss:{loss.detach():4.4g}{" "*4}|',)
                                 )
-
+        # Free up GPU memory used by the training dataset
+        del images, masks, preds, loss  # Delete tensors to remove references
+        if config.use_aux:
+            del preds_aux
+        if config.use_detail_head:
+            del masks_detail, preds_detail, loss_detail
+        if config.kd_training:
+            del teacher_preds, loss_kd
+        torch.cuda.empty_cache()  # Free up memory
         return
 
     @torch.no_grad()
@@ -132,6 +174,10 @@ class SegTrainer(BaseTrainer):
 
             if self.main_rank:
                 pbar.set_description(('%s'*1) % (f'Validating:{" "*4}|',))
+
+        # Free up GPU memory used by the validation dataset
+        del images, masks, preds  # Delete tensors to remove references
+        torch.cuda.empty_cache()  # Free up memory
 
         iou = self.metrics.compute()
         score = iou.mean()  # mIoU
@@ -151,6 +197,7 @@ class SegTrainer(BaseTrainer):
         self.metrics.reset()
         return score
 
+
     @torch.no_grad()
     def predict(self, config):
         if config.DDP:
@@ -158,13 +205,13 @@ class SegTrainer(BaseTrainer):
             
         self.logger.info('\nStart predicting...\n')
 
-        self.model.eval() # Put model in evalation mode
+        self.model.eval() # Put model in evaluation mode
 
         for (images, images_aug, img_names) in tqdm(self.test_loader):
             images_aug = images_aug.to(self.device, dtype=torch.float32)
             
             preds = self.model(images_aug)
-                        
+
             preds = self.colormap[preds.max(dim=1)[1]].cpu().numpy()
             
             images = images.cpu().numpy()
@@ -185,3 +232,40 @@ class SegTrainer(BaseTrainer):
                     image = Image.fromarray(images[i].astype(np.uint8))
                     image = Image.blend(image, pred, config.blend_alpha)
                     image.save(save_blend_path)
+            # Clear variables to free up memory
+            del images_aug, preds, images, pred
+            torch.cuda.empty_cache()
+
+    def show_mask_on_image(self, img, mask):
+        img = np.float32(img) / 255
+        heatmap = cv2.applyColorMap(np.uint8(255 * mask), cv2.COLORMAP_JET)
+        heatmap = np.float32(heatmap) / 255
+        cam = heatmap + np.float32(img)
+        cam = cam / np.max(cam)
+        return np.uint8(255 * cam)
+
+    def explain(self, config):
+        # self.model.eval()
+        # transform = AT.Compose([
+        #     ToTensorV2(),
+        # ])
+        # img = Image.open(config.path_to_sample)
+        # image = np.asarray(img.convert('RGB'))
+        # # Perform augmentation and normalization
+        # augmented = transform(image=image)
+        # image_tensor = augmented['image'].unsqueeze(0)
+        # image_tensor= image_tensor.to(self.device, dtype=torch.float32)
+        # attention_rollout = VITAttentionRollout(self.model, head_fusion="max", 
+        #     discard_ratio=0)
+        # mask = attention_rollout(image_tensor)
+        # name = "attention_rollout_{:.3f}_{}.png".format("0", "max")
+        # np_img = np.array(img)[:, :, ::-1]
+        # mask = cv2.resize(mask, (np_img.shape[1], np_img.shape[0]))
+        # mask = self.show_mask_on_image(np_img, mask)
+        # cv2.imshow("Input Image", np_img)
+        # cv2.imshow(name, mask)
+        # cv2.imwrite("input.png", np_img)
+        # cv2.imwrite(name, mask)
+        # cv2.waitKey(-1)
+        checkpoint = torch.load("./save/farseenet_pre/last.pth")
+        print(checkpoint["state_dict"].keys())

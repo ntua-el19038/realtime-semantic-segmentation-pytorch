@@ -13,7 +13,7 @@ def get_optimizer(config, model):
 
     elif config.optimizer_type in ['adam', 'adamw']:
         config.lr = 0.001 * config.gpu_num
-        optimizer = optimizer_hub[config.optimizer_type](params=params, lr=config.lr)
+        optimizer = optimizer_hub[config.optimizer_type](params=params, lr=config.lr, weight_decay=0.01)
 
     else:
         raise NotImplementedError(f'Unsupported optimizer type: {config.optimizer_type}')

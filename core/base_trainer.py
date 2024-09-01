@@ -60,7 +60,9 @@ class BaseTrainer:
             self.best_score = 0.
             self.cur_epoch = 0
             self.train_itrs = 0
-        
+
+            #Define variable for grokking
+            self.grads = None
         # Load specific checkpoints if needed
         self.load_ckpt(config)
 
@@ -124,6 +126,7 @@ class BaseTrainer:
         raise NotImplementedError()
 
     def load_ckpt(self, config):
+        # print(os.path.isfile(config.load_ckpt_path))
         if config.load_ckpt and os.path.isfile(config.load_ckpt_path):
             checkpoint = torch.load(config.load_ckpt_path, map_location=torch.device(self.device))
             self.model.load_state_dict(checkpoint['state_dict'])
@@ -136,6 +139,13 @@ class BaseTrainer:
                 self.optimizer.load_state_dict(checkpoint['optimizer'])
                 self.scheduler.load_state_dict(checkpoint['scheduler'])
                 self.train_itrs = self.cur_epoch * config.iters_per_epoch
+
+                # Check if 'grads' is in the checkpoint and set it accordingly
+                if 'grads' in checkpoint and config.grokfast ==True:
+                    self.grads = checkpoint['grads']
+                else:
+                    self.grads = None
+
 
                 if self.main_rank:
                     self.logger.info(f"Resume training from {config.load_ckpt_path}")
@@ -153,15 +163,24 @@ class BaseTrainer:
             save_name = 'best.pth' if save_best else 'last.pth'
         save_path = f'{config.save_dir}/{save_name}'
         state_dict = self.ema_model.ema.state_dict() if save_best else de_parallel(self.model).state_dict()
-
-        torch.save({
-            'cur_epoch': self.cur_epoch,
-            'best_score': self.best_score,
-            'state_dict': state_dict,
-            'optimizer': self.optimizer.state_dict() if not save_best else None,
-            'scheduler': self.scheduler.state_dict() if not save_best else None,
-        }, save_path)
-
+        if config.grokfast ==True:
+            torch.save({
+                'cur_epoch': self.cur_epoch,
+                'best_score': self.best_score,
+                'state_dict': state_dict,
+                'optimizer': self.optimizer.state_dict() if not save_best else None,
+                'scheduler': self.scheduler.state_dict() if not save_best else None,
+                'grads': self.grads if not save_best else None,
+            }, save_path)
+        else:
+            torch.save({
+                'cur_epoch': self.cur_epoch,
+                'best_score': self.best_score,
+                'state_dict': state_dict,
+                'optimizer': self.optimizer.state_dict() if not save_best else None,
+                'scheduler': self.scheduler.state_dict() if not save_best else None,
+                # 'grads': self.grads if not save_best else None,
+            }, save_path)
     def val_best(self, config, ckpt_path=None):
         ckpt_path = f"{config.save_dir}/best.pth" if ckpt_path is None else ckpt_path
         if not os.path.isfile(ckpt_path):

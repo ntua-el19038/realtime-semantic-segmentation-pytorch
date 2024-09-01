@@ -1,13 +1,18 @@
 from torch.utils.data import DataLoader
 from .cityscapes import Cityscapes
+from .synthia import Synthia
+from .gta import Gta
+from .uavid import UAVIDDataset, UAVIDDatasetV2
+from .synthia_gta import  Synthia_Gta
+from .prostate_Decathlon_dataset import ProstateDataset
 
-dataset_hub = {'cityscapes':Cityscapes,}
+dataset_hub = {'cityscapes':Cityscapes, 'synthia':Synthia, 'gta':Gta,'synthia_gta': Synthia_Gta, 'uavid1': UAVIDDataset, 'uavid2': UAVIDDatasetV2, 'prostate': ProstateDataset}
 
 
 def get_dataset(config):
     if config.dataset in dataset_hub.keys():
-        train_dataset = dataset_hub[config.dataset](config=config, mode='train')
-        val_dataset = dataset_hub[config.dataset](config=config, mode='val')
+        train_dataset = dataset_hub[config.dataset](config=config)
+        val_dataset = dataset_hub[config.dataset](config=config)
     else:
         raise NotImplementedError('Unsupported dataset!')
         
@@ -50,7 +55,6 @@ def get_test_loader(config):
     dataset = TestDataset(config)
 
     config.test_num = len(dataset)
-
     if config.DDP:
         raise NotImplementedError()
 

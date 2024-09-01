@@ -17,5 +17,7 @@ if __name__ == '__main__':
     
     if config.is_testing:
         trainer.predict(config)
+    elif config.explainability:
+        trainer.explain(config)
     else:    
         trainer.run(config)
