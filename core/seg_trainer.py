@@ -1,20 +1,17 @@
 import os
-import torch
-import numpy as np
-from PIL import Image
-from tqdm import tqdm
-from torch.cuda import amp
-import torch.nn.functional as F
-import albumentations as AT
-from albumentations.pytorch import ToTensorV2
 
+import numpy as np
+import torch
+import torch.nn.functional as F
+from PIL import Image
+from PIL.ImageColor import colormap
+from torch.cuda import amp
+from tqdm import tqdm
+
+from models import get_teacher_model
+from utils import (get_seg_metrics, sampler_set_epoch, get_colormap, gradfilter_ema)
 from .base_trainer import BaseTrainer
 from .loss import kd_loss_fn
-from models import get_teacher_model
-from utils import (get_seg_metrics, sampler_set_epoch, get_colormap, gradfilter_ma, gradfilter_ema, transforms)
-# from vit_explain import VITAttentionGradRollout, VITAttentionRollout
-from PIL import Image
-import cv2
 
 
 class SegTrainer(BaseTrainer):
@@ -23,6 +20,7 @@ class SegTrainer(BaseTrainer):
         if config.is_testing:
             self.colormap = torch.tensor(get_colormap(config)).to(self.device)
         else:
+            # self.colormap = torch.tensor(get_colormap(config)).to(self.device)
             self.teacher_model = get_teacher_model(config, self.device)
             self.metrics = get_seg_metrics(config).to(self.device)
 
@@ -56,25 +54,22 @@ class SegTrainer(BaseTrainer):
 
 
     def train_one_epoch(self, config):
-        # print(self.grads)
         self.model.train()
-        
-        sampler_set_epoch(config, self.train_loader, self.cur_epoch) 
+        # print(self.train_loader.dataset.__getitem__(0))
+        sampler_set_epoch(config, self.train_loader, self.cur_epoch)
     
         pbar = tqdm(self.train_loader) if self.main_rank else self.train_loader
 
         #try to implement gradient accumulation
-        accumulation_steps = 3  # Number of iterations to accumulate gradients
-
+        accumulation_steps = config.accumulate_grad_batches  # Number of iterations to accumulate gradients
         for cur_itrs, (images, masks) in enumerate(pbar):
             self.cur_itrs = cur_itrs
             self.train_itrs += 1
-
             images = images.to(self.device, dtype=torch.float32)
             masks = masks.to(self.device, dtype=torch.long)    
+            if config.accumulate_grad_batches==1:
+                self.optimizer.zero_grad()
 
-            # self.optimizer.zero_grad()
-            
             # Forward path
             if config.use_aux:
                 with amp.autocast(enabled=config.amp_training):
@@ -115,6 +110,8 @@ class SegTrainer(BaseTrainer):
             else:
                 with amp.autocast(enabled=config.amp_training):
                     preds = self.model(images)
+                    if config.model=="daformer":
+                        preds=F.interpolate(preds, masks.shape[1:], mode='bilinear', align_corners=True)
                     loss = self.loss_fn(preds, masks)
 
             if config.use_tb and self.main_rank:
@@ -136,14 +133,23 @@ class SegTrainer(BaseTrainer):
                     self.writer.add_scalar('train/loss_total', loss.detach(), self.train_itrs)
                    
             # Backward path with gradient accumulation
-            self.scaler.scale(loss/ accumulation_steps).backward()
-            if (cur_itrs + 1) % accumulation_steps == 0:
-                if config.grokfast:
-                    self.grads = gradfilter_ema(self.model, grads=self.grads)
+            if config.accumulate_grad_batches>1:
+                self.scaler.scale(loss/ accumulation_steps).backward()
+                if (cur_itrs + 1) % accumulation_steps == 0:
+                    if config.grokfast:
+                        self.grads = gradfilter_ema(self.model, grads=self.grads)
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                    self.optimizer.zero_grad()  # Reset gradients after accumulation step
+                    self.scheduler.step()
+                    self.ema_model.update(self.model, self.train_itrs)
+            # Backward path
+            else:
+                self.scaler.scale(loss).backward()
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
-                self.optimizer.zero_grad()  # Reset gradients after accumulation step
                 self.scheduler.step()
+
                 self.ema_model.update(self.model, self.train_itrs)
 
             if self.main_rank:
@@ -170,7 +176,12 @@ class SegTrainer(BaseTrainer):
             masks = masks.to(self.device, dtype=torch.long)
 
             preds = self.ema_model.ema(images)
-            self.metrics.update(preds.detach(), masks)
+            if config.model == "daformer":
+                preds = F.interpolate(preds, masks.shape[1:], mode='bilinear', align_corners=True)
+            # if config.dataset == 'prostate':
+            #     preds = preds.max(dim=1)[1]
+
+            self.metrics.update(preds, masks)
 
             if self.main_rank:
                 pbar.set_description(('%s'*1) % (f'Validating:{" "*4}|',))
@@ -181,17 +192,25 @@ class SegTrainer(BaseTrainer):
 
         iou = self.metrics.compute()
         score = iou.mean()  # mIoU
-
+        for i in iou:
+            print(i)
         if self.main_rank:
             if val_best:
                 self.logger.info(f'\n\nTrain {config.total_epoch} epochs finished.' + 
                                  f'\n\nBest mIoU is: {score:.4f}\n')
             else:
-                self.logger.info(f' Epoch{self.cur_epoch} mIoU: {score:.4f}    | ' + 
+                # if config.dataset == 'prostate':
+                #     self.logger.info(f' Epoch{self.cur_epoch} Dice: {score:.4f}    | ' +
+                #                      f'best Dice so far: {self.best_score:.4f}\n')
+                # else:
+                self.logger.info(f' Epoch{self.cur_epoch} mIoU: {score:.4f}    | ' +
                                  f'best mIoU so far: {self.best_score:.4f}\n')
 
             if config.use_tb and self.cur_epoch < config.total_epoch:
                 self.writer.add_scalar('val/mIoU', score.cpu(), self.cur_epoch+1)
+                # if config.dataset == 'prostate':
+                #     self.writer.add_scalar(f'val/IoU_cls{0:02f}', iou.cpu(), self.cur_epoch + 1)
+                # else:
                 for i in range(config.num_class):
                     self.writer.add_scalar(f'val/IoU_cls{i:02f}', iou[i].cpu(), self.cur_epoch+1)
         self.metrics.reset()
@@ -236,36 +255,4 @@ class SegTrainer(BaseTrainer):
             del images_aug, preds, images, pred
             torch.cuda.empty_cache()
 
-    def show_mask_on_image(self, img, mask):
-        img = np.float32(img) / 255
-        heatmap = cv2.applyColorMap(np.uint8(255 * mask), cv2.COLORMAP_JET)
-        heatmap = np.float32(heatmap) / 255
-        cam = heatmap + np.float32(img)
-        cam = cam / np.max(cam)
-        return np.uint8(255 * cam)
 
-    def explain(self, config):
-        # self.model.eval()
-        # transform = AT.Compose([
-        #     ToTensorV2(),
-        # ])
-        # img = Image.open(config.path_to_sample)
-        # image = np.asarray(img.convert('RGB'))
-        # # Perform augmentation and normalization
-        # augmented = transform(image=image)
-        # image_tensor = augmented['image'].unsqueeze(0)
-        # image_tensor= image_tensor.to(self.device, dtype=torch.float32)
-        # attention_rollout = VITAttentionRollout(self.model, head_fusion="max", 
-        #     discard_ratio=0)
-        # mask = attention_rollout(image_tensor)
-        # name = "attention_rollout_{:.3f}_{}.png".format("0", "max")
-        # np_img = np.array(img)[:, :, ::-1]
-        # mask = cv2.resize(mask, (np_img.shape[1], np_img.shape[0]))
-        # mask = self.show_mask_on_image(np_img, mask)
-        # cv2.imshow("Input Image", np_img)
-        # cv2.imshow(name, mask)
-        # cv2.imwrite("input.png", np_img)
-        # cv2.imwrite(name, mask)
-        # cv2.waitKey(-1)
-        checkpoint = torch.load("./save/farseenet_pre/last.pth")
-        print(checkpoint["state_dict"].keys())

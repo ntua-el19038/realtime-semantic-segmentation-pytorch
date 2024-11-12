@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
 class OhemCELoss(nn.Module):
     def __init__(self, thresh, ignore_index=255):
         super(OhemCELoss, self).__init__()
@@ -63,7 +62,9 @@ def get_loss_fn(config, device):
                                         reduction='mean', weight=weights)
 
     elif config.loss_type == 'ohem':
-        criterion = OhemCELoss(thresh=config.ohem_thrs, ignore_index=config.ignore_index)  
+        criterion = OhemCELoss(thresh=config.ohem_thrs, ignore_index=config.ignore_index)
+    elif config.loss_type == 'dice':
+        criterion = DiceLoss()
 
     else:
         raise NotImplementedError(f"Unsupport loss type: {config.loss_type}")

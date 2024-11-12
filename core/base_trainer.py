@@ -46,10 +46,10 @@ class BaseTrainer:
         
             # Define loss function
             self.loss_fn = get_loss_fn(config, self.device)
-            
+            # print("here")
             # Get train and validate loader
             self.train_loader, self.val_loader = get_loader(config, self.local_rank)
-        
+            # print("here")
             # Define optimizer
             self.optimizer = get_optimizer(config, self.model)
             
@@ -69,6 +69,7 @@ class BaseTrainer:
         # Use exponential moving average of checkpoint update if needed
         if not config.is_testing:
             self.ema_model = get_ema_model(config, self.model, self.device)
+
 
     def run(self, config):
         # Parallel the model using DP or DDP
@@ -127,6 +128,7 @@ class BaseTrainer:
 
     def load_ckpt(self, config):
         # print(os.path.isfile(config.load_ckpt_path))
+        # print(config.load_ckpt_path)
         if config.load_ckpt and os.path.isfile(config.load_ckpt_path):
             checkpoint = torch.load(config.load_ckpt_path, map_location=torch.device(self.device))
             self.model.load_state_dict(checkpoint['state_dict'])
