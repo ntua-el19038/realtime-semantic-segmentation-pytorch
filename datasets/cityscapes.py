@@ -110,22 +110,23 @@ class Cityscapes(Dataset):
             
         if not os.path.isdir(msk_dir):
             raise RuntimeError(f'Mask directory: {msk_dir} does not exist.')
-        
+
         if mode == 'train':
             self.transform = AT.Compose([
-                transforms.Scale(scale=config.scale),
+                AT.Resize(height=config.scale, width=config.scale),  # Replace Scale with Resize
                 AT.RandomScale(scale_limit=config.randscale),
-                AT.PadIfNeeded(min_height=config.crop_h, min_width=config.crop_w, value=(114,114,114), mask_value=(0,0,0)),
+                AT.PadIfNeeded(min_height=config.crop_h, min_width=config.crop_w, value=(114, 114, 114),
+                               mask_value=(0, 0, 0)),
                 AT.RandomCrop(height=config.crop_h, width=config.crop_w),
                 AT.ColorJitter(brightness=config.brightness, contrast=config.contrast, saturation=config.saturation),
                 AT.HorizontalFlip(p=config.h_flip),
                 AT.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-                ToTensorV2(),                
+                ToTensorV2(),
             ])
             
         elif mode == 'val':
             self.transform = AT.Compose([
-                transforms.Scale(scale=config.scale),
+                AT.Resize(height=config.scale, width=config.scale),  # Replace Scale with Resize
                 AT.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
                 ToTensorV2(),
             ])

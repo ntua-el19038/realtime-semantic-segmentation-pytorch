@@ -4,15 +4,21 @@ from .synthia import Synthia
 from .gta import Gta
 from .uavid import UAVIDDataset, UAVIDDatasetV2
 from .synthia_gta import  Synthia_Gta
-from .prostate_Decathlon_dataset import ProstateDataset
+from .prostate import ProstateDataset
+from .all_prostate import AllProstateDataset
+from .ACDC import ACDC
+import torch
+dataset_hub = {'cityscapes':Cityscapes, 'synthia':Synthia, 'gta':Gta,'synthia_gta': Synthia_Gta, 'uavid1': UAVIDDataset, 'uavid2': UAVIDDatasetV2, 'prostate':AllProstateDataset, 'cardiac':ACDC}
 
-dataset_hub = {'cityscapes':Cityscapes, 'synthia':Synthia, 'gta':Gta,'synthia_gta': Synthia_Gta, 'uavid1': UAVIDDataset, 'uavid2': UAVIDDatasetV2, 'prostate': ProstateDataset}
-
-
+# def collate_fn(batch):
+#     return {
+#       torch.stack([torch.tensor(x[0]) for x in batch]),
+#       torch.tensor([x[1] for x in batch])
+#     }
 def get_dataset(config):
     if config.dataset in dataset_hub.keys():
-        train_dataset = dataset_hub[config.dataset](config=config)
-        val_dataset = dataset_hub[config.dataset](config=config)
+        train_dataset = dataset_hub[config.dataset](config=config, mode='train')
+        val_dataset = dataset_hub[config.dataset](config=config, mode='val')
     else:
         raise NotImplementedError('Unsupported dataset!')
         
@@ -32,20 +38,29 @@ def get_loader(config, rank, pin_memory=True):
                                             rank=rank, shuffle=True)
         val_sampler = DistributedSampler(val_dataset, num_replicas=config.gpu_num,
                                             rank=rank, shuffle=False)
+        if config.dataset == 'cardiac':
+            train_loader = DataLoader(train_dataset, batch_size=config.train_bs, shuffle=False,
+                                        num_workers=config.num_workers, pin_memory=pin_memory,
+                                        sampler=train_sampler, drop_last=True)
 
-        train_loader = DataLoader(train_dataset, batch_size=config.train_bs, shuffle=False, 
-                                    num_workers=config.num_workers, pin_memory=pin_memory, 
-                                    sampler=train_sampler, drop_last=True)
-                                    
-        val_loader = DataLoader(val_dataset, batch_size=config.val_bs, shuffle=False,
-                                    num_workers=config.num_workers, pin_memory=pin_memory,
-                                    sampler=val_sampler)
+            val_loader = DataLoader(val_dataset, batch_size=config.val_bs, shuffle=False,
+                                        num_workers=config.num_workers, pin_memory=pin_memory,
+                                        sampler=val_sampler)
+        else:
+            train_loader = DataLoader(train_dataset, batch_size=config.train_bs, shuffle=False,
+                                        num_workers=config.num_workers, pin_memory=pin_memory,
+                                        sampler=train_sampler, drop_last=True)
+
+            val_loader = DataLoader(val_dataset, batch_size=config.val_bs, shuffle=False,
+                                        num_workers=config.num_workers, pin_memory=pin_memory,
+                                        sampler=val_sampler)
+
     else:
-        train_loader = DataLoader(train_dataset, batch_size=config.train_bs, 
-                                    shuffle=True, num_workers=config.num_workers, drop_last=True)
-                                    
-        val_loader = DataLoader(val_dataset, batch_size=config.val_bs, 
-                                    shuffle=False, num_workers=config.num_workers)
+        train_loader = DataLoader(train_dataset, batch_size=config.train_bs,
+                                  shuffle=True, num_workers=config.num_workers, drop_last=True)
+
+        val_loader = DataLoader(val_dataset, batch_size=config.val_bs,
+                                shuffle=False, num_workers=config.num_workers)
 
     return train_loader, val_loader
 
