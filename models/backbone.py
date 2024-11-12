@@ -4,24 +4,35 @@ import torch.nn as nn
 class ResNet(nn.Module):
     # Load ResNet pretrained on ImageNet from torchvision, see
     # https://pytorch.org/vision/stable/models/resnet.html
-    def __init__(self, resnet_type, pretrained=True):
+    def __init__(self, resnet_type, pretrained=True, n_channel=3):
         super(ResNet, self).__init__()
         from torchvision.models import resnet18, resnet34, resnet50, resnet101, resnet152
-
         resnet_hub = {'resnet18':resnet18, 'resnet34':resnet34, 'resnet50':resnet50,
                         'resnet101':resnet101, 'resnet152':resnet152}
         if resnet_type not in resnet_hub:
             raise ValueError(f'Unsupported ResNet type: {resnet_type}.\n')
+        if resnet_type == 'resnet18' and n_channel==1:
+            resnet = resnet_hub[resnet_type](pretrained=pretrained)
+            self.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3,
+                                   bias=False)
+            self.bn1 = resnet.bn1
+            self.relu = resnet.relu
+            self.maxpool = resnet.maxpool
+            self.layer1 = resnet.layer1
+            self.layer2 = resnet.layer2
+            self.layer3 = resnet.layer3
+            self.layer4 = resnet.layer4
+        else:
+            resnet = resnet_hub[resnet_type](pretrained=pretrained)
+            self.conv1 = resnet.conv1
+            self.bn1 = resnet.bn1
+            self.relu = resnet.relu
+            self.maxpool = resnet.maxpool
+            self.layer1 = resnet.layer1
+            self.layer2 = resnet.layer2
+            self.layer3 = resnet.layer3
+            self.layer4 = resnet.layer4
 
-        resnet = resnet_hub[resnet_type](pretrained=pretrained)
-        self.conv1 = resnet.conv1
-        self.bn1 = resnet.bn1
-        self.relu = resnet.relu
-        self.maxpool = resnet.maxpool
-        self.layer1 = resnet.layer1
-        self.layer2 = resnet.layer2
-        self.layer3 = resnet.layer3
-        self.layer4 = resnet.layer4
 
     def forward(self, x):
         x = self.conv1(x)       # 2x down

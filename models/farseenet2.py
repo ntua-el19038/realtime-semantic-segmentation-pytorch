@@ -1,5 +1,5 @@
 """
-Paper:      FarSee-Net: Real-Time Semantic Segmentation by Efficient Multi-scale 
+Paper:      FarSee-Net: Real-Time Semantic Segmentation by Efficient Multi-scale
             Context Aggregation and Feature Space Super-resolution
 Url:        https://arxiv.org/abs/2003.03913
 Create by:  zh320
@@ -10,21 +10,28 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .mixtransformer import MixVisionTransformer
+from .mixtransformer1 import MixVisionTransformer1
 from .modules import conv1x1, DWConvBNAct, ConvBNAct
-from .backbone import ResNet
 
 
-class FarSeeNet(nn.Module):
-    def __init__(self, num_class=1, n_channel=3, backbone_type='resnet18', act_type='relu'):
-        super(FarSeeNet, self).__init__()
-        if 'resnet' in backbone_type:
-            self.frontend_network = ResNet(backbone_type, n_channel=n_channel )
-            high_channels = 512 if backbone_type in ['resnet18', 'resnet34'] else 2048
-            low_channels = 256 if backbone_type in ['resnet18', 'resnet34'] else 1024
+class FarSeeNet2(nn.Module):
+    def __init__(self, num_class=1, n_channel=3, backbone_type='mixtransformer', act_type='relu'):
+        super(FarSeeNet2, self).__init__()
+        if 'mixtransformer' in backbone_type and n_channel == 3:
+            self.frontend_network = MixVisionTransformer.from_type(1)
+            # Load the saved weights
+            saved_weights_path = './pretrained/mit_b1.pth'
+            self.frontend_network.load_state_dict(torch.load(saved_weights_path))
+        elif backbone_type == 'mixtransformer' and n_channel == 1:
+            self.frontend_network = MixVisionTransformer1.from_type(1)
+            # Load the saved weights
+            # saved_weights_path = './pretrained/mit_b5.pth'
+            # self.frontend_network.load_state_dict(torch.load(saved_weights_path))
         else:
             raise NotImplementedError()
 
-        self.backend_network = FASPP(high_channels, low_channels, num_class, act_type)
+        self.backend_network = FASPP(512, 320, num_class, act_type)
 
     def forward(self, x):
         size = x.size()[2:]
@@ -39,13 +46,14 @@ class FarSeeNet(nn.Module):
 
 
 class FASPP(nn.Module):
-    def __init__(self, high_channels, low_channels, num_class, act_type, 
-                    dilations=[6,12,18], hid_channels=256):
+    def __init__(self, high_channels, low_channels, num_class, act_type,
+                 dilations=[6, 12, 18], hid_channels=256):
         super(FASPP, self).__init__()
+        # self.dropout = nn.Dropout2d(0.1)
         # High level convolutions
         self.conv_high = nn.ModuleList([
-                                ConvBNAct(high_channels, hid_channels, 1, act_type=act_type)
-                            ])
+            ConvBNAct(high_channels, hid_channels, 1, act_type=act_type)
+        ])
         for dt in dilations:
             self.conv_high.append(
                 nn.Sequential(
@@ -55,32 +63,32 @@ class FASPP(nn.Module):
             )
 
         self.sub_pixel_high = nn.Sequential(
-                                    conv1x1(hid_channels*4, hid_channels*2*(2**2)),
-                                    nn.PixelShuffle(2)
-                                )
+            conv1x1(hid_channels * 4, hid_channels * 2 * (2 ** 2)),
+            nn.PixelShuffle(2)
+        )
 
         # Low level convolutions
         self.conv_low_init = ConvBNAct(low_channels, 48, 1, act_type=act_type)
         self.conv_low = nn.ModuleList([
-                            ConvBNAct(hid_channels*2+48, hid_channels//2, 1, act_type=act_type)
-                        ])
+            ConvBNAct(hid_channels * 2 + 48, hid_channels // 2, 1, act_type=act_type)
+        ])
         for dt in dilations[:-1]:
             self.conv_low.append(
                 nn.Sequential(
-                    ConvBNAct(hid_channels*2+48, hid_channels//2, 1, act_type=act_type),
-                    DWConvBNAct(hid_channels//2, hid_channels//2, 3, dilation=dt, act_type=act_type)
+                    ConvBNAct(hid_channels * 2 + 48, hid_channels // 2, 1, act_type=act_type),
+                    DWConvBNAct(hid_channels // 2, hid_channels // 2, 3, dilation=dt, act_type=act_type)
                 )
             )
 
         self.conv_low_last = nn.Sequential(
-                                ConvBNAct(hid_channels//2*3, hid_channels*2, 1, act_type=act_type),
-                                ConvBNAct(hid_channels*2, hid_channels*2, act_type=act_type)
-                            )
+            ConvBNAct(hid_channels // 2 * 3, hid_channels * 2, 1, act_type=act_type),
+            ConvBNAct(hid_channels * 2, hid_channels * 2, act_type=act_type)
+        )
 
         self.sub_pixel_low = nn.Sequential(
-                                conv1x1(hid_channels*2, num_class*(4**2)),
-                                nn.PixelShuffle(4)
-                            )
+            conv1x1(hid_channels * 2, num_class * (4 ** 2)),
+            nn.PixelShuffle(4)
+        )
 
     def forward(self, x_high, x_low):
         # High level features
@@ -98,9 +106,9 @@ class FASPP(nn.Module):
         low_feats = []
         for conv_low in self.conv_low:
             low_feats.append(conv_low(x))
-            
+
         x = torch.cat(low_feats, dim=1)
         x = self.conv_low_last(x)
         x = self.sub_pixel_low(x)
-
+        # x = self.dropout(x)
         return x

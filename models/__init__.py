@@ -1,5 +1,6 @@
 import os, torch
 import segmentation_models_pytorch as smp
+from dask.dataframe.io.tests.test_csv import comment_footer
 
 from .adscnet import ADSCNet
 from .aglnet import AGLNet
@@ -20,6 +21,7 @@ from .espnet import ESPNet
 from .espnetv2 import ESPNetv2
 from .fanet import FANet
 from .farseenet import FarSeeNet
+from .farseenet4 import FarSeeNet4
 from .fastscnn import FastSCNN
 from .fddwnet import FDDWNet
 from .fpenet import FPENet
@@ -42,8 +44,9 @@ from .mlpmixer import MLP_Mixer
 from .farseenet2 import FarSeeNet2
 from .farseenet3 import FarSeeNet3
 from .shelfnet2 import ShelfNet2
-from .farseenet_pre import FarSeeNet_Pre
-
+from  .farseenet1 import FarSeeNet1
+from .daformer import DaFormer
+from .segformer import SegFormer
 
 
 decoder_hub = {'deeplabv3':smp.DeepLabV3, 'deeplabv3p':smp.DeepLabV3Plus, 'fpn':smp.FPN,
@@ -56,27 +59,29 @@ model_hub = {'adscnet':ADSCNet, 'aglnet':AGLNet, 'bisenetv1':BiSeNetv1,
                 'ddrnet':DDRNet, 'dfanet':DFANet, 'edanet':EDANet, 
                 'enet':ENet, 'erfnet':ERFNet, 'esnet':ESNet, 
                 'espnet':ESPNet, 'espnetv2':ESPNetv2, 'fanet':FANet, 'farseenet':FarSeeNet,
-                'farseenet2':FarSeeNet2, 'farseenet3':FarSeeNet3, 'farseenet_pre': FarSeeNet_Pre, 
+                'farseenet2':FarSeeNet2, 'farseenet3':FarSeeNet3, 'farseenet4': FarSeeNet4,
                 'fastscnn':FastSCNN, 'fddwnet':FDDWNet, 'fpenet':FPENet, 
                 'fssnet':FSSNet, 'icnet':ICNet, 'lednet':LEDNet,
                 'linknet':LinkNet, 'lite_hrnet':LiteHRNet, 'liteseg':LiteSeg, 'mininet':MiniNet, 
                 'mininetv2':MiniNetv2, 'ppliteseg':PPLiteSeg, 'regseg':RegSeg,
                 'segnet':SegNet, 'shelfnet':ShelfNet, 'sqnet':SQNet, 
-                'stdc':STDC, 'swiftnet':SwiftNet, 'mlpmixer': MLP_Mixer, 'shelfnet2': ShelfNet2}
+                'stdc':STDC, 'swiftnet':SwiftNet, 'mlpmixer': MLP_Mixer, 'shelfnet2': ShelfNet2,
+                "daformer":DaFormer, 'segformer':SegFormer}
 def get_model(config):
-    model_hub = {'adscnet':ADSCNet, 'aglnet':AGLNet, 'bisenetv1':BiSeNetv1, 
-                'bisenetv2':BiSeNetv2, 'canet':CANet, 'cfpnet':CFPNet, 
-                'cgnet':CGNet, 'contextnet':ContextNet, 'dabnet':DABNet, 
-                'ddrnet':DDRNet, 'dfanet':DFANet, 'edanet':EDANet, 
-                'enet':ENet, 'erfnet':ERFNet, 'esnet':ESNet, 
+    mmodel_hub = {'adscnet':ADSCNet, 'aglnet':AGLNet, 'bisenetv1':BiSeNetv1,
+                'bisenetv2':BiSeNetv2, 'canet':CANet, 'cfpnet':CFPNet,
+                'cgnet':CGNet, 'contextnet':ContextNet, 'dabnet':DABNet,
+                'ddrnet':DDRNet, 'dfanet':DFANet, 'edanet':EDANet,
+                'enet':ENet, 'erfnet':ERFNet, 'esnet':ESNet,
                 'espnet':ESPNet, 'espnetv2':ESPNetv2, 'fanet':FANet, 'farseenet':FarSeeNet,
-                'farseenet2':FarSeeNet2, 'farseenet3':FarSeeNet3, 'farseenet_pre': FarSeeNet_Pre, 
-                'fastscnn':FastSCNN, 'fddwnet':FDDWNet, 'fpenet':FPENet, 
+                'farseenet2':FarSeeNet2, 'farseenet3':FarSeeNet3, 'farseenet4': FarSeeNet4,
+                'fastscnn':FastSCNN, 'fddwnet':FDDWNet, 'fpenet':FPENet,
                 'fssnet':FSSNet, 'icnet':ICNet, 'lednet':LEDNet,
-                'linknet':LinkNet, 'lite_hrnet':LiteHRNet, 'liteseg':LiteSeg, 'mininet':MiniNet, 
+                'linknet':LinkNet, 'lite_hrnet':LiteHRNet, 'liteseg':LiteSeg, 'mininet':MiniNet,
                 'mininetv2':MiniNetv2, 'ppliteseg':PPLiteSeg, 'regseg':RegSeg,
-                'segnet':SegNet, 'shelfnet':ShelfNet, 'sqnet':SQNet, 
-                'stdc':STDC, 'swiftnet':SwiftNet, 'mlpmixer': MLP_Mixer, 'shelfnet2': ShelfNet2}
+                'segnet':SegNet, 'shelfnet':ShelfNet, 'sqnet':SQNet,
+                'stdc':STDC, 'swiftnet':SwiftNet, 'mlpmixer': MLP_Mixer, 'shelfnet2': ShelfNet2,
+                "daformer":DaFormer, 'segformer':SegFormer}
 
     # The following models currently support auxiliary heads
     aux_models = ['bisenetv2', 'ddrnet', 'icnet']
@@ -102,8 +107,10 @@ def get_model(config):
                 raise ValueError(f'Model {config.model} does not support auxiliary heads.\n')
             if config.use_detail_head:
                 raise ValueError(f'Model {config.model} does not support detail heads.\n')
-
-            model = model_hub[config.model](num_class=config.num_class)
+            if config.dataset == 'prostate' or config.dataset == 'cardiac':
+                model = model_hub[config.model](num_class=config.num_class, n_channel=1)
+            else:
+                model = model_hub[config.model](num_class=config.num_class)
 
     else:
         raise NotImplementedError(f"Unsupport model type: {config.model}")
@@ -128,7 +135,7 @@ def get_teacher_model(config, device):
         model.load_state_dict(teacher_ckpt['state_dict'])
         del teacher_ckpt
 
-        model = model.to(device)    
+        model = model.to(device)
         model.eval()
     else:
         model = None
