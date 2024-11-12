@@ -2,3 +2,7 @@
 datasets/prostate_dataset/
 
 datasets/vol/
+
+pretrained/
+
+datasets/uavid/
