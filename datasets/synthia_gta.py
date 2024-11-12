@@ -2,6 +2,7 @@ import os
 from collections import namedtuple
 
 import albumentations as AT
+import cv2
 import numpy as np
 from PIL import Image
 from albumentations.pytorch import ToTensorV2
@@ -133,11 +134,11 @@ class Synthia_Gta(Dataset):
                 AT.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
                 ToTensorV2(),
             ],is_check_shapes=False)
-            for file_name in os.listdir(img_dir):
-                self.images.append(os.path.join(img_dir, file_name))
-                base_name, extension = os.path.splitext(file_name)
-                new_filename = f'{base_name}_labelTrainIds{extension}'
-                self.masks.append(os.path.join(msk_dir, new_filename))
+            # for file_name in os.listdir(img_dir):
+            #     self.images.append(os.path.join(img_dir, file_name))
+            #     base_name, extension = os.path.splitext(file_name)
+            #     new_filename = f'{base_name}_labelTrainIds{extension}'
+            #     self.masks.append(os.path.join(msk_dir, new_filename))
 
 
 
@@ -150,21 +151,21 @@ class Synthia_Gta(Dataset):
                 ToTensorV2(),
             ])
 
-            for city in os.listdir(img_dir):
-                city_img_dir = os.path.join(img_dir, city)
-                city_mask_dir = os.path.join(msk_dir, city)
-
-                for file_name in os.listdir(city_img_dir):
-                    self.images.append(os.path.join(city_img_dir, file_name))
-                    mask_name = f"{file_name.split('_leftImg8bit')[0]}_gtFine_labelIds.png"
-                    self.masks.append(os.path.join(city_mask_dir, mask_name))
+            # for city in os.listdir(img_dir):
+            #     city_img_dir = os.path.join(img_dir, city)
+            #     city_mask_dir = os.path.join(msk_dir, city)
+            #
+            #     for file_name in os.listdir(city_img_dir):
+            #         self.images.append(os.path.join(city_img_dir, file_name))
+            #         mask_name = f"{file_name.split('_leftImg8bit')[0]}_gtFine_labelIds.png"
+            #         self.masks.append(os.path.join(city_mask_dir, mask_name))
 
                     # else:
-        # for file_name in os.listdir(img_dir):
-        #     self.images.append(os.path.join(img_dir, file_name))
-        #     base_name, extension = os.path.splitext(file_name)
-        #     new_filename = f'{base_name}_labelTrainIds{extension}'
-        #     self.masks.append(os.path.join(msk_dir, new_filename))
+        for file_name in os.listdir(img_dir):
+            self.images.append(os.path.join(img_dir, file_name))
+            base_name, extension = os.path.splitext(file_name)
+            new_filename = f'{base_name}_labelTrainIds{extension}'
+            self.masks.append(os.path.join(msk_dir, new_filename))
 
     def __len__(self):
         return len(self.images)
@@ -172,6 +173,9 @@ class Synthia_Gta(Dataset):
     def __getitem__(self, index):
         image = np.asarray(Image.open(self.images[index]).convert('RGB'))
         mask = np.asarray(Image.open(self.masks[index]).convert('L'))
+        # Resize mask to match image dimensions if they are not equal
+        if image.shape[:2] != mask.shape[:2]:
+            mask = cv2.resize(mask, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_NEAREST)
         #
         # # Log original shapes
         # print(f"Original shapes - Image: {image.shape}, Mask: {mask.shape}")

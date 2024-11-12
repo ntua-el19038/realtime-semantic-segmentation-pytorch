@@ -5,16 +5,16 @@ class MyConfig(BaseConfig):
     def __init__(self,):
         super(MyConfig, self).__init__()
         # Dataset
-        self.dataset = 'cardiac'
-        self.data_root = './datasets/vol/biomedic3/cc215/data/ACDC/preprocessed'
-        # self.data_root = './datasets/uavid'
+        self.dataset = 'gta'
+        # self.data_root = './datasets/vol/biomedic3/cc215/data/ACDC/preprocessed'
+        self.data_root = './datasets/gta'
 
         # Model
         self.model = 'farseenet4'
 
         # Training
-        self.total_epoch = 20
-        self.train_bs = 8
+        self.total_epoch = 50
+        self.train_bs = 1
         self.loss_type = 'ce'
         self.optimizer_type = 'adamw'
         self.logger_name = 'seg_trainer'
@@ -26,8 +26,9 @@ class MyConfig(BaseConfig):
         # Testing
         self.is_testing = False
         self.test_bs = 1
-        self.test_data_folder = './datasets/vol/biomedic3/cc215/data/ACDC/ACDC_artefacted/RandomBias'
-        self.load_ckpt_path =  './save/farseenet4_bs8_ga1_cardiac_2c/last.pth'
+        self.test_data_folder= './datasets/gta'
+        # self.test_data_folder = './datasets/vol/biomedic3/cc215/data/ACDC/ACDC_artefacted/RandomBias'
+        self.load_ckpt_path =  './save/farseenet4_bs1_ga8_gta/last.pth'
         self.save_mask = True
 
         # Training setting

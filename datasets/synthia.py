@@ -2,6 +2,7 @@ import os
 from collections import namedtuple
 
 import albumentations as AT
+import cv2
 import numpy as np
 from PIL import Image
 from albumentations.pytorch import ToTensorV2
@@ -123,7 +124,7 @@ class Synthia(Dataset):
         if mode == 'train':
             if mode == 'train':
                 self.transform = AT.Compose([
-                    AT.Resize(height=config.scale, width=config.scale),  # Replace Scale with Resize
+                    AT.Resize(height=config.crop_size, width=config.crop_size),
                     AT.RandomScale(scale_limit=config.randscale),
                     AT.PadIfNeeded(min_height=config.crop_h, min_width=config.crop_w, value=(114, 114, 114),
                                    mask_value=(0, 0, 0)),
@@ -134,37 +135,37 @@ class Synthia(Dataset):
                     AT.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
                     ToTensorV2(),
                 ])
-            for file_name in os.listdir(img_dir):
-                self.images.append(os.path.join(img_dir, file_name))
-                base_name, extension = os.path.splitext(file_name)
-                new_filename = f'{base_name}_labelTrainIds{extension}'
-                self.masks.append(os.path.join(msk_dir, new_filename))
+            # for file_name in os.listdir(img_dir):
+            #     self.images.append(os.path.join(img_dir, file_name))
+            #     base_name, extension = os.path.splitext(file_name)
+            #     new_filename = f'{base_name}_labelTrainIds{extension}'
+            #     self.masks.append(os.path.join(msk_dir, new_filename))
 
 
 
         elif mode == 'val':
             self.transform = AT.Compose([
-                AT.Resize(height=config.scale, width=config.scale),  # Replace Scale with Resize
+                AT.Resize(height=config.crop_size, width=config.crop_size),  # Replace Scale with Resize
                 # AT.PadIfNeeded(min_height=config.crop_h, min_width=config.crop_w, value=(114,114,114), mask_value=(0,0,0)), #remove for cityscapes evaluation
                 AT.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
                 ToTensorV2(),
             ])
 
-            for city in os.listdir(img_dir):
-                city_img_dir = os.path.join(img_dir, city)
-                city_mask_dir = os.path.join(msk_dir, city)
-
-                for file_name in os.listdir(city_img_dir):
-                    self.images.append(os.path.join(city_img_dir, file_name))
-                    mask_name = f"{file_name.split('_leftImg8bit')[0]}_gtFine_labelIds.png"
-                    self.masks.append(os.path.join(city_mask_dir, mask_name))
+            # for city in os.listdir(img_dir):
+            #     city_img_dir = os.path.join(img_dir, city)
+            #     city_mask_dir = os.path.join(msk_dir, city)
+            #
+            #     for file_name in os.listdir(city_img_dir):
+            #         self.images.append(os.path.join(city_img_dir, file_name))
+            #         mask_name = f"{file_name.split('_leftImg8bit')[0]}_gtFine_labelIds.png"
+            #         self.masks.append(os.path.join(city_mask_dir, mask_name))
 
                     # else:
-        # for file_name in os.listdir(img_dir):
-        #     self.images.append(os.path.join(img_dir, file_name))
-        #     base_name, extension = os.path.splitext(file_name)
-        #     new_filename = f'{base_name}_labelTrainIds{extension}'
-        #     self.masks.append(os.path.join(msk_dir, new_filename))
+        for file_name in os.listdir(img_dir):
+            self.images.append(os.path.join(img_dir, file_name))
+            base_name, extension = os.path.splitext(file_name)
+            new_filename = f'{base_name}_labelTrainIds{extension}'
+            self.masks.append(os.path.join(msk_dir, new_filename))
 
     def __len__(self):
         return len(self.images)
@@ -172,6 +173,11 @@ class Synthia(Dataset):
     def __getitem__(self, index):
         image = np.asarray(Image.open(self.images[index]).convert('RGB'))
         mask = np.asarray(Image.open(self.masks[index]).convert('L'))
+
+        # Ensure the mask matches the image dimensions
+        if image.shape[:2] != mask.shape[:2]:
+            mask = cv2.resize(mask, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_NEAREST)
+
 
         # Perform augmentation and normalization
         augmented = self.transform(image=image, mask=mask)

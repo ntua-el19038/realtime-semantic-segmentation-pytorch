@@ -13,9 +13,9 @@ from .transform import *
 CLASSES = ('Building', 'Road', 'Tree', 'LowVeg', 'Moving_Car',  'Static_Car', 'Human', 'Clutter')
 PALETTE = [[128, 0, 0], [128, 64, 128], [0, 128, 0], [128, 128, 0], [64, 0, 128], [192, 0, 192], [64, 64, 0], [0, 0, 0]]
 
-ORIGIN_IMG_SIZE = (1024, 1024)
-INPUT_IMG_SIZE = (1024, 1024)
-TEST_IMG_SIZE = (1024, 1024)
+ORIGIN_IMG_SIZE = (512, 512)
+INPUT_IMG_SIZE = (512, 512)
+TEST_IMG_SIZE = (512, 512)
 
 
 def get_training_transform():
@@ -175,6 +175,7 @@ class UAVIDDatasetV2(Dataset):
         self.mode = mode
         self.mosaic_ratio = mosaic_ratio
         self.num_classes = num_classes
+        print(num_classes)
         self.class_interest = class_interest
         self.class_ratio = class_ratio
         self.img_size = img_size

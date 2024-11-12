@@ -1,5 +1,7 @@
 import os
 from collections import namedtuple
+
+import cv2
 import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
@@ -113,7 +115,7 @@ class Cityscapes(Dataset):
 
         if mode == 'train':
             self.transform = AT.Compose([
-                AT.Resize(height=config.scale, width=config.scale),  # Replace Scale with Resize
+                AT.Resize(height=config.crop_size, width=config.crop_size), # Replace Scale with Resize
                 AT.RandomScale(scale_limit=config.randscale),
                 AT.PadIfNeeded(min_height=config.crop_h, min_width=config.crop_w, value=(114, 114, 114),
                                mask_value=(0, 0, 0)),
@@ -126,7 +128,7 @@ class Cityscapes(Dataset):
             
         elif mode == 'val':
             self.transform = AT.Compose([
-                AT.Resize(height=config.scale, width=config.scale),  # Replace Scale with Resize
+                AT.Resize(height=config.crop_size, width=config.crop_size),  # Replace Scale with Resize
                 AT.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
                 ToTensorV2(),
             ])
@@ -149,6 +151,9 @@ class Cityscapes(Dataset):
     def __getitem__(self, index):
         image = np.asarray(Image.open(self.images[index]).convert('RGB'))
         mask = np.asarray(Image.open(self.masks[index]).convert('L'))
+        # Resize mask to match image dimensions if they are not equal
+        if image.shape[:2] != mask.shape[:2]:
+            mask = cv2.resize(mask, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_NEAREST)
         
         # Perform augmentation and normalization
         augmented = self.transform(image=image, mask=mask)

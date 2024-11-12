@@ -1,11 +1,11 @@
 class BaseConfig:
     def __init__(self,):
         # Dataset
-        self.dataset = 'cardiac'
-        self.data_root = './datasets/vol/biomedic3/cc215/data/ACDC/preprocessed'
-        # self.data_root = './datasets/uavid'
-        self.num_class = 4
-        self.ignore_index = 0
+        self.dataset = 'gta'
+        # self.data_root = './datasets/vol/biomedic3/cc215/data/ACDC/preprocessed'
+        self.data_root = './datasets/gta'
+        self.num_class = 19
+        self.ignore_index = 255
 
         # Model
         self.model = 'farseenet4'
@@ -21,10 +21,10 @@ class BaseConfig:
         self.bce_loss_coef = 1.0
 
         # Training
-        self.total_epoch = 20
+        self.total_epoch = 50
         self.base_lr = 0.01
         self.train_bs = 1 # For each GPU
-        self.accumulate_grad_batches = 1
+        self.accumulate_grad_batches = 8
         self.use_aux = False
         self.aux_coef = None
 
@@ -36,8 +36,9 @@ class BaseConfig:
         # Testing
         self.is_testing = False
         self.test_bs = 1
-        self.test_data_folder = './datasets/vol/biomedic3/cc215/data/ACDC/ACDC_artefacted/RandomBias'
-        self.colormap = 'cityscapes'
+        self.test_data_folder = './datasets/gta/test'
+        # self.test_data_folder = './datasets/vol/biomedic3/cc215/data/ACDC/ACDC_artefacted/RandomBias'
+        self.colormap = 'gta'
         self.save_mask = True
         self.blend_prediction = True
         self.blend_alpha = 0.3
@@ -58,7 +59,7 @@ class BaseConfig:
 
         # Monitoring
         self.save_ckpt = True
-        self.save_dir = './save/farseenet4_bs8_ga1_cardiac_2'
+        self.save_dir = './save/farseenet4_bs1_ga8_gta'
         self.use_tb = True          # tensorboard
         self.tb_log_dir = None
         self.ckpt_name = None
@@ -67,7 +68,7 @@ class BaseConfig:
         self.amp_training = False
         self.resume_training = True
         self.load_ckpt = True
-        self.load_ckpt_path = './save/farseenet4_bs8_ga1_cardiac_2/last.pth'
+        self.load_ckpt_path = './save/farseenet4_bs1_ga8_gta/last.pth'
         self.base_workers = 5
         self.random_seed = 1
         self.use_ema = False
