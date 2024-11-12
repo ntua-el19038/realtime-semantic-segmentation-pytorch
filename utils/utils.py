@@ -47,7 +47,7 @@ def log_config(config, logger):
     keys = ['dataset', 'num_class', 'model', 'encoder', 'decoder', 'loss_type', 
             'optimizer_type', 'lr_policy', 'total_epoch', 'train_bs', 'val_bs',  
             'train_num', 'val_num', 'gpu_num', 'num_workers', 'amp_training', 
-            'DDP', 'kd_training', 'synBN', 'use_ema', 'use_aux', 'grokfast']
+            'DDP', 'kd_training', 'synBN', 'use_ema', 'use_aux', 'grokfast', 'test_data_folder', 'accumulate_grad_batches']
             
     config_dict = vars(config)
     infos = f"\n\n\n{'#'*25} Config Informations {'#'*25}\n" 
@@ -64,6 +64,8 @@ def get_colormap(config):
                     12:(255,  0,  0), 13:(  0,  0,142), 14:(  0,  0, 70), 15:(  0, 60,100),
                     16:(  0, 80,100), 17:(  0,  0,230), 18:(119, 11, 32)}
 
+    elif config.colormap == 'prostate':
+        colormap = {0: 0, 1:255}
     elif config.colormap == 'custom':
         raise NotImplementedError()
         
