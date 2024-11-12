@@ -1,5 +1,6 @@
 import sys, time, torch
 from os import path
+import torchprofile
 sys.path.append( path.dirname( path.dirname( path.abspath(__file__) ) ) )
 
 from configs import MyConfig, load_parser
@@ -12,7 +13,7 @@ def test_model_speed(config, ratio=0.5, imgw=2048, imgh=1024, iterations=None):
     
     if ratio != 1.0:
         assert ratio > 0, 'Ratio should be larger than 0.\n'
-        imgw = 512 #int(imgw * ratio)
+        imgw = 512 #1024 #int(imgw * ratio)
         imgh = 512 #int(imgh * ratio)
 
     device = torch.device('cuda')
@@ -25,7 +26,7 @@ def test_model_speed(config, ratio=0.5, imgw=2048, imgh=1024, iterations=None):
     print('\n=========Speed Testing=========')
     print(f'Model: {config.model}\nEncoder: {config.encoder}\nDecoder: {config.decoder}')
     print(f'Size (W, H): {imgw}, {imgh}')
-    
+
     input = torch.randn(1, 3, imgh, imgw).cuda()
     with torch.no_grad():
         for _ in range(10):
@@ -60,6 +61,18 @@ def test_model_speed(config, ratio=0.5, imgw=2048, imgh=1024, iterations=None):
     FPS = 1000 / latency
     print(f'FPS: {FPS}\n')
 
+
+    print('\n=========FLOPs Testing=========')
+    print(f'Model: {config.model}\nEncoder: {config.encoder}\nDecoder: {config.decoder}')
+    print(f'Size (W, H): {imgw}, {imgh}')
+    # Create a dummy input
+    input = torch.randn(1, 3, imgh, imgw).cuda()
+
+    # Calculate FLOPs using torchprofile
+    with torch.no_grad():
+        flops = torchprofile.profile_macs(model, input)
+
+    print(f'FLOPs: {flops / 1e9} GFLOPs\n')  # Display FLOPs in GigaFLOPs
 
 if __name__ == '__main__':
     config = MyConfig()
